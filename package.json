@@ -20,7 +20,7 @@
     "command-line-usage": "^4.0.2",
     "eslint": "^4.15.0",
     "eslint-plugin-import": "^2.8.0",
-    "fs-extra": "^5.0.0",
+    "fs-extra": "^7.0.1",
     "prettier": "^1.9.2",
     "puppeteer": "^1.0.0-rc",
     "slugify": "^1.2.9"
