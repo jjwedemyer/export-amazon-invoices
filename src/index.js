@@ -18,6 +18,8 @@ import argDefinitions from './lib/argDefinitions';
 import selectors from './lib/selectors';
 import {resultsPerPage} from './lib/constants';
 
+process.setMaxListeners(0);
+
 const args = commandLineArgs(argDefinitions);
 
 if (credentialsAreMissing(args)) {
@@ -39,6 +41,9 @@ const failedExports = [];
     ],
   });
   const page = await browser.newPage();
+  page.on('console', msg => {
+   console.log(msg._text)
+  });
 
   // enable download of PDF files, see https://github.com/GoogleChrome/puppeteer/issues/610#issuecomment-340160025
   // make function writeABString available on the window object
@@ -67,7 +72,6 @@ const failedExports = [];
 
   for (let ii = 0; ii < args.year.length; ii++) {
     const year = args.year[ii];
-    log();
     logStatus(`Exporting orders of ${year}`);
 
     const outputFolder = `./output/${year}`;
@@ -86,6 +90,7 @@ const failedExports = [];
       outputFolder,
     };
 
+
     for (let i = 1, l = numberOfOrders; i <= l; i++) {
       await loadNextPageIfRequired(page, i, numberOfOrders, year);
 
@@ -102,10 +107,12 @@ const failedExports = [];
       const popoverContent = `#a-popover-content-${orderIndex + 1} ${selectors.list.popoverLinks}`;
 
       context.orderNumber = orderNumber;
+      context.orderIndex = i;
 
       try {
         const s = selectors.list;
         const order = `${s.order}:nth-of-type(${orderIndex})`;
+
 
         // get metadata of order
         context.orderDetails = await getOrderDetails(page, order);
@@ -114,6 +121,8 @@ const failedExports = [];
         const popoverTrigger = await page.$(`${order} ${s.popoverTrigger}`);
         await popoverTrigger.click();
         await page.waitFor(popoverContent); // the popover content can take up to 1-3 seconds to load
+
+        
 
         await page.evaluate(
           async (sel, context) => {
@@ -138,14 +147,16 @@ const failedExports = [];
               return result;
             };
 
-            document.querySelectorAll(sel).forEach(async link => {
+            
+            const selectors = document.querySelectorAll(sel);
+            selectors.forEach(async link => {
               // Amazon invoice links match either pattern 'Rechnung 1' or pattern 'Rechnung oder Gutschrift 1'
               const invoiceLinkRegex = /^Rechnung( oder Gutschrift)?\s[0-9]{1,2}/;
-
+              console.log(link.innerText)
               const isInvoiceLink = invoiceLinkRegex.test(link.innerText);
               if (isInvoiceLink) {
                 // download invoice to output folder
-
+                console.log(`isLink: ${context.orderNumber}`)
                 // for 3rd party merchants only a delivery note is available
                 // and a proper invoice must be requested from the merchant
                 const requestInvoice = link.href.includes('generated_invoices') ? 'ANFORDERN_' : '';
@@ -154,11 +165,12 @@ const failedExports = [];
                   credentials: 'same-origin', // useful for sending cookies when logged in
                   responseType: 'arraybuffer',
                 })
-                  .then(response => response.arrayBuffer())
+                  .then(response => {
+                    return response.arrayBuffer()
+                  })
                   .then(arrayBuffer => {
                     const aBString = ab2str(arrayBuffer);
                     const path = `${context.outputFolder}/${requestInvoice}Amazon_Rechnung_${context.orderNumber}.pdf`;
-
                     return window.writeABString(aBString, path);
                   })
                   .catch(e => console.error('Request failed', e));
